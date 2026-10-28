@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="theme-color" content="#f97316" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <title>Fresh Tweets</title>
+        <style>
+            * {
+                box-sizing: border-box;
+                -webkit-tap-highlight-color: transparent;
+            }
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                background: #f2f2f2;
+                color: #000;
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    "Helvetica Neue", Arial, "Noto Sans",
+                    "Noto Sans Devanagari", sans-serif;
+                min-height: 100dvh;
+            }
+            #app {
+                max-width: 520px;
+                margin: 0 auto;
+                min-height: 100dvh;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-weight: 800;
+                font-size: 16px;
+                color: #555;
+                padding: 4px 2px 0;
+            }
+            .brand .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: #000;
+                display: inline-block;
+            }
+
+            /* Base button */
+            .btn {
+                border: 3px solid #000;
+                border-radius: 16px;
+                font-family: inherit;
+                font-weight: 800;
+                cursor: pointer;
+                touch-action: manipulation;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                user-select: none;
+                -webkit-user-select: none;
+                transition:
+                    background 0.15s ease,
+                    color 0.15s ease;
+                background: #fff;
+                color: #000;
+            }
+            .btn:active {
+                background: #000;
+                color: #fff;
+            }
+            .btn svg {
+                flex: 0 0 auto;
+            }
+
+            /* NEW: small, light grey, least important */
+            .new {
+                background: #e2e2e2;
+                height: 60px;
+                font-size: 19px;
+            }
+            #newIcon {
+                transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
+            }
+
+            /* Text card */
+            #card {
+                background: #fff;
+                border: 3px solid #000;
+                border-radius: 20px;
+                padding: 28px 20px;
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                min-height: 40dvh;
+            }
+            #tweet {
+                font-weight: 700;
+                line-height: 1.5;
+                text-align: center;
+                overflow-wrap: anywhere;
+                white-space: pre-wrap;
+                user-select: text;
+                -webkit-user-select: text;
+            }
+
+            /* COPY: biggest, solid black, main action */
+            .copy {
+                background: #000;
+                color: #fff;
+                height: 96px;
+                font-size: 28px;
+                letter-spacing: 0.5px;
+            }
+            .copy:active {
+                background: #000; /* does not change or move when pressed */
+                color: #fff;
+            }
+            .copy.copied {
+                background: #fff;
+                color: #000;
+            }
+
+            /* POST: medium, outlined */
+            .post {
+                background: #fff;
+                color: #000;
+                height: 76px;
+                font-size: 22px;
+            }
+
+            /* Kept as no-ops so JS toggling these classes still works */
+            .wiggle,
+            .pulse {
+                animation: none;
+            }
+
+            /* Full-screen "done" message */
+            #flash {
+                position: fixed;
+                inset: 0;
+                background: #000;
+                color: #fff;
+                display: grid;
+                place-items: center;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.25s ease;
+                z-index: 50;
+            }
+            #flash.on {
+                opacity: 1;
+            }
+
+            /* Small message at the bottom */
+            #hint {
+                position: fixed;
+                left: 50%;
+                bottom: 30px;
+                transform: translate(-50%, 16px);
+                background: #000;
+                color: #fff;
+                padding: 14px 22px;
+                border-radius: 14px;
+                font-weight: 700;
+                font-size: 17px;
+                opacity: 0;
+                pointer-events: none;
+                transition: all 0.25s ease;
+                z-index: 60;
+                max-width: 88%;
+                text-align: center;
+                white-space: pre-line;
+            }
+            #hint.on {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+
+            /* Error screen */
+            #err {
+                position: fixed;
+                inset: 0;
+                background: #f2f2f2;
+                display: grid;
+                place-items: center;
+                z-index: 100;
+                text-align: center;
+                padding: 24px;
+            }
+            .erricon {
+                font-size: 56px;
+            }
+            #err p {
+                font-weight: 700;
+                font-size: 20px;
+                color: #000;
+                line-height: 1.5;
+            }
+            .retry {
+                background: #000;
+                color: #fff;
+                height: 64px;
+                padding: 0 36px;
+                font-size: 20px;
+                margin-top: 8px;
+            }
+            .retry:active {
+                background: #fff;
+                color: #000;
+            }
+
+            @media (min-width: 700px) {
+                #app {
+                    max-width: 560px;
+                    padding-top: 28px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <button id="btnNew" class="btn new" aria-label="Show a new tweet">
+                <svg
+                    id="newIcon"
+                    width="30"
+                    height="30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span>NEW TWEET</span>
+            </button>
+
+            <main id="card">
+                <div id="tweet" aria-live="polite">Loading&#8230;</div>
+            </main>
+
+            <button id="btnCopy" class="btn copy" aria-label="Copy tweet text">
+                <svg
+                    width="34"
+                    height="34"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <rect
+                        x="9"
+                        y="9"
+                        width="13"
+                        height="13"
+                        rx="2.5"
+                        ry="2.5"
+                    ></rect>
+                    <path
+                        d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                    ></path>
+                </svg>
+                <span id="copyLabel">COPY</span>
+            </button>
+
+            <button
+                id="btnPost"
+                class="btn post"
+                aria-label="Open X to post this tweet"
+            >
+                <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+                    ></path>
+                </svg>
+                <span>POST ON X</span>
+            </button>
+        </div>
+
+        <div id="flash">
+            <svg
+                width="120"
+                height="120"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fff"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            >
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        <div id="hint"></div>
+
+        <div id="err" style="display: none">
+            <div>
+                <div class="erricon">&#9888;&#65039;</div>
+                <p>Could not load tweets.<br />Check internet and try again.</p>
+                <button class="btn retry" onclick="location.reload()">
+                    TRY AGAIN
+                </button>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                "use strict";
+                var $ = function (id) {
+                    return document.getElementById(id);
+                };
+                var LS_CACHE = "td_cache_v1",
+                    LS_SEEN = "td_seen_v1";
+
+                /* Safe storage: falls back to memory if localStorage is blocked */
+                var store = {
+                    m: {},
+                    get: function (k) {
+                        try {
+                            return localStorage.getItem(k);
+                        } catch (e) {
+                            return Object.prototype.hasOwnProperty.call(
+                                this.m,
+                                k,
+                            )
+                                ? this.m[k]
+                                : null;
+                        }
+                    },
+                    set: function (k, v) {
+                        try {
+                            localStorage.setItem(k, v);
+                        } catch (e) {
+                            this.m[k] = v;
+                        }
+                    },
+                    del: function (k) {
+                        try {
+                            localStorage.removeItem(k);
+                        } catch (e) {
+                            delete this.m[k];
+                        }
+                    },
+                };
+
+                var tweets = [],
+                    current = "";
+
+                /* Accepts: ["tweet",...] | [{"text"|"content"|"tweet"|"body":...},...] | {"tweets":[...]} */
+                function normalize(data) {
+                    var arr = Array.isArray(data)
+                        ? data
+                        : data && Array.isArray(data.tweets)
+                          ? data.tweets
+                          : [];
+                    var out = [];
+                    for (var i = 0; i < arr.length; i++) {
+                        var x = arr[i],
+                            s = "";
+                        if (typeof x === "string") s = x;
+                        else if (x && typeof x === "object")
+                            s = x.text || x.content || x.tweet || x.body || "";
+                        s = String(s).replace(/\r\n/g, "\n").trim();
+                        if (s) out.push(s);
+                    }
+                    return out;
+                }
+
+                function loadTweets() {
+                    return fetch("tweets/tweets.json", { cache: "no-cache" })
+                        .then(function (r) {
+                            if (!r.ok) throw new Error("http " + r.status);
+                            return r.json();
+                        })
+                        .then(function (data) {
+                            var arr = normalize(data);
+                            if (!arr.length) throw new Error("empty");
+                            tweets = arr;
+                            store.set(LS_CACHE, JSON.stringify(arr));
+                            return true;
+                        })
+                        .catch(function () {
+                            try {
+                                var c = store.get(LS_CACHE);
+                                if (c) {
+                                    var arr = normalize(JSON.parse(c));
+                                    if (arr.length) {
+                                        tweets = arr;
+                                        return true;
+                                    }
+                                }
+                            } catch (e) {}
+                            return false;
+                        });
+                }
+
+                /* Pure random: every visit/refresh deals one uniformly random tweet.
+   Works with any list size. One silent re-roll avoids showing the exact
+   same tweet twice in a row (only ever noticeable on very small lists). */
+                function pickRandom() {
+                    if (!tweets.length) return;
+                    var t = tweets[Math.floor(Math.random() * tweets.length)];
+                    if (tweets.length > 1 && t === current)
+                        t = tweets[Math.floor(Math.random() * tweets.length)];
+                    current = t;
+                    render();
+                }
+
+                function render() {
+                    var el = $("tweet");
+                    el.textContent = current;
+                    var n = current.length;
+                    el.style.fontSize =
+                        (n > 240 ? 20 : n > 170 ? 23 : n > 100 ? 27 : 32) +
+                        "px";
+                    resetCopyUI();
+                }
+
+                /* ---------- COPY ---------- */
+                var copyTimer = null;
+                function resetCopyUI() {
+                    if (copyTimer) {
+                        clearTimeout(copyTimer);
+                        copyTimer = null;
+                    }
+                    $("btnCopy").classList.remove("copied");
+                    $("copyLabel").textContent = "COPY";
+                }
+                function copiedUI() {
+                    var b = $("btnCopy");
+                    b.classList.remove("wiggle");
+                    b.classList.add("copied");
+                    $("copyLabel").textContent = "COPIED";
+                    var f = $("flash");
+                    f.classList.add("on");
+                    setTimeout(function () {
+                        f.classList.remove("on");
+                    }, 650);
+                    try {
+                        if (navigator.vibrate) navigator.vibrate(60);
+                    } catch (e) {}
+                    beep();
+                    var p = $("btnPost");
+                    p.classList.remove("pulse");
+                    void p.offsetWidth;
+                    p.classList.add("pulse");
+                    store.set(LS_SEEN, "1");
+                    if (copyTimer) clearTimeout(copyTimer);
+                    copyTimer = setTimeout(resetCopyUI, 1900);
+                }
+                function fallbackCopy(t) {
+                    try {
+                        var ta = document.createElement("textarea");
+                        ta.value = t;
+                        ta.setAttribute("readonly", "");
+                        ta.style.cssText =
+                            "position:fixed;top:0;left:0;font-size:16px;opacity:0;z-index:-1";
+                        document.body.appendChild(ta);
+                        if (/ipad|iphone|ipod/i.test(navigator.userAgent)) {
+                            var r = document.createRange();
+                            r.selectNodeContents(ta);
+                            var s = window.getSelection();
+                            s.removeAllRanges();
+                            s.addRange(r);
+                        } else {
+                            ta.select();
+                        }
+                        var ok = document.execCommand("copy");
+                        document.body.removeChild(ta);
+                        return !!ok;
+                    } catch (e) {
+                        return false;
+                    }
+                }
+                function copyTweet() {
+                    var t = current;
+                    if (!t) return;
+                    var useApi = false;
+                    try {
+                        useApi = !!(
+                            navigator.clipboard && window.isSecureContext
+                        );
+                    } catch (e) {}
+                    if (useApi) {
+                        navigator.clipboard
+                            .writeText(t)
+                            .then(copiedUI, function () {
+                                if (!fallbackCopy(t))
+                                    hint(
+                                        "Could not auto-copy.\nPress & hold the text, then Copy.",
+                                    );
+                            });
+                        return;
+                    }
+                    if (fallbackCopy(t)) copiedUI();
+                    else
+                        hint(
+                            "Could not auto-copy.\nPress & hold the text, then Copy.",
+                        );
+                }
+
+                /* ---------- misc UI ---------- */
+                var hintTimer = null;
+                function hint(msg) {
+                    var h = $("hint");
+                    h.textContent = msg;
+                    h.classList.add("on");
+                    if (hintTimer) clearTimeout(hintTimer);
+                    hintTimer = setTimeout(function () {
+                        h.classList.remove("on");
+                    }, 2400);
+                }
+                var ang = 0;
+                function spin() {
+                    ang += 360;
+                    $("newIcon").style.transform = "rotate(" + ang + "deg)";
+                }
+
+                /* ---------- POST on X ---------- */
+                function postX() {
+                    var t = current;
+                    if (!t) return;
+                    var w = window.open(
+                        "https://x.com/intent/tweet?text=" +
+                            encodeURIComponent(t),
+                        "_blank",
+                    );
+                    if (w) {
+                        try {
+                            w.opener = null;
+                        } catch (e) {}
+                    } else hint("Allow pop-ups to post directly.");
+                }
+
+                /* ---------- beep (success cue for non-readers) ---------- */
+                var actx = null;
+                function beep() {
+                    try {
+                        var AC =
+                            window.AudioContext || window.webkitAudioContext;
+                        if (!AC) return;
+                        if (!actx) actx = new AC();
+                        if (actx.state === "suspended") actx.resume();
+                        var o = actx.createOscillator(),
+                            g = actx.createGain();
+                        o.type = "sine";
+                        o.frequency.value = 880;
+                        var t0 = actx.currentTime;
+                        g.gain.setValueAtTime(0.0001, t0);
+                        g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
+                        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+                        o.connect(g);
+                        g.connect(actx.destination);
+                        o.start(t0);
+                        o.stop(t0 + 0.2);
+                    } catch (e) {}
+                }
+
+                /* ---------- init ---------- */
+                function init() {
+                    store.del("td_deck_v1");
+                    store.del(
+                        "td_pos_v1",
+                    ); /* clean up old deck data from previous versions */
+                    $("btnNew").addEventListener("click", function () {
+                        spin();
+                        pickRandom();
+                    });
+                    $("btnCopy").addEventListener("click", copyTweet);
+                    $("btnPost").addEventListener("click", postX);
+                    loadTweets().then(function (ok) {
+                        if (!ok) {
+                            $("app").style.display = "none";
+                            $("err").style.display = "grid";
+                            return;
+                        }
+                        pickRandom(); /* every visit/refresh = one random tweet */
+                        if (!store.get(LS_SEEN))
+                            $("btnCopy").classList.add(
+                                "wiggle",
+                            ); /* first-visit nudge to COPY */
+                    });
+                }
+                if (document.readyState === "loading")
+                    document.addEventListener("DOMContentLoaded", init);
+                else init();
+            })();
+        </script>
+    </body>
+</html>
