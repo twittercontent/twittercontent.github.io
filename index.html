@@ -92,19 +92,25 @@
                 transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
             }
 
+            /* List of tweet cards */
+            #list {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+
             /* Text card */
-            #card {
+            .card {
                 background: #fff;
                 border: 3px solid #000;
                 border-radius: 20px;
                 padding: 28px 20px;
-                flex: 1;
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
-                min-height: 40dvh;
+                gap: 16px;
             }
-            #tweet {
+            .tweet {
                 font-weight: 700;
                 line-height: 1.5;
                 text-align: center;
@@ -230,7 +236,7 @@
     </head>
     <body>
         <div id="app">
-            <button id="btnNew" class="btn new" aria-label="Show a new tweet">
+            <button id="btnNew" class="btn new" aria-label="Refresh">
                 <svg
                     id="newIcon"
                     width="30"
@@ -245,57 +251,12 @@
                     <polyline points="23 4 23 10 17 10"></polyline>
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                 </svg>
-                <span>NEW TWEET</span>
+                <span>REFRESH</span>
             </button>
 
-            <main id="card">
-                <div id="tweet" aria-live="polite">Loading&#8230;</div>
+            <main id="list" aria-live="polite">
+                <div class="tweet">Loading&#8230;</div>
             </main>
-
-            <button id="btnCopy" class="btn copy" aria-label="Copy tweet text">
-                <svg
-                    width="34"
-                    height="34"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <rect
-                        x="9"
-                        y="9"
-                        width="13"
-                        height="13"
-                        rx="2.5"
-                        ry="2.5"
-                    ></rect>
-                    <path
-                        d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                    ></path>
-                </svg>
-                <span id="copyLabel">COPY</span>
-            </button>
-
-            <button
-                id="btnPost"
-                class="btn post"
-                aria-label="Open X to post this tweet"
-            >
-                <svg
-                    width="28"
-                    height="28"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden="true"
-                >
-                    <path
-                        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-                    ></path>
-                </svg>
-                <span>POST ON X</span>
-            </button>
         </div>
 
         <div id="flash">
@@ -364,8 +325,7 @@
                     },
                 };
 
-                var tweets = [],
-                    current = "";
+                var tweets = [];
 
                 /* Accepts: ["tweet",...] | [{"text"|"content"|"tweet"|"body":...},...] | {"tweets":[...]} */
                 function normalize(data) {
@@ -415,43 +375,82 @@
                         });
                 }
 
-                /* Pure random: every visit/refresh deals one uniformly random tweet.
-   Works with any list size. One silent re-roll avoids showing the exact
-   same tweet twice in a row (only ever noticeable on very small lists). */
-                function pickRandom() {
+                /* Shuffle: every visit/refresh shows all tweets in a fresh random order. */
+                function shuffleAll() {
                     if (!tweets.length) return;
-                    var t = tweets[Math.floor(Math.random() * tweets.length)];
-                    if (tweets.length > 1 && t === current)
-                        t = tweets[Math.floor(Math.random() * tweets.length)];
-                    current = t;
-                    render();
+                    var a = tweets.slice();
+                    for (var i = a.length - 1; i > 0; i--) {
+                        var j = Math.floor(Math.random() * (i + 1));
+                        var tmp = a[i];
+                        a[i] = a[j];
+                        a[j] = tmp;
+                    }
+                    render(a);
                 }
 
-                function render() {
-                    var el = $("tweet");
-                    el.textContent = current;
-                    var n = current.length;
+                function makeCard(text) {
+                    var card = document.createElement("div");
+                    card.className = "card";
+
+                    var el = document.createElement("div");
+                    el.className = "tweet";
+                    el.textContent = text;
+                    var n = text.length;
                     el.style.fontSize =
                         (n > 240 ? 20 : n > 170 ? 23 : n > 100 ? 27 : 32) +
                         "px";
-                    resetCopyUI();
+                    card.appendChild(el);
+
+                    var c = document.createElement("button");
+                    c.className = "btn copy";
+                    c.setAttribute("aria-label", "Copy tweet text");
+                    c.innerHTML =
+                        '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<rect x="9" y="9" width="13" height="13" rx="2.5" ry="2.5"></rect>' +
+                        '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+                        "</svg><span>COPY</span>";
+                    c.addEventListener("click", function () {
+                        copyTweet(text, c);
+                    });
+                    card.appendChild(c);
+
+                    var p = document.createElement("button");
+                    p.className = "btn post";
+                    p.setAttribute("aria-label", "Open X to post this tweet");
+                    p.innerHTML =
+                        '<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+                        '<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path>' +
+                        "</svg><span>POST ON X</span>";
+                    p.addEventListener("click", function () {
+                        postX(text);
+                    });
+                    card.appendChild(p);
+
+                    return card;
+                }
+
+                function render(arr) {
+                    var list = $("list");
+                    list.textContent = "";
+                    var frag = document.createDocumentFragment();
+                    for (var i = 0; i < arr.length; i++)
+                        frag.appendChild(makeCard(arr[i]));
+                    list.appendChild(frag);
                 }
 
                 /* ---------- COPY ---------- */
-                var copyTimer = null;
-                function resetCopyUI() {
-                    if (copyTimer) {
-                        clearTimeout(copyTimer);
-                        copyTimer = null;
+                function resetCopyUI(b) {
+                    if (b._t) {
+                        clearTimeout(b._t);
+                        b._t = null;
                     }
-                    $("btnCopy").classList.remove("copied");
-                    $("copyLabel").textContent = "COPY";
+                    b.classList.remove("copied");
+                    b.querySelector("span").textContent = "COPY";
                 }
-                function copiedUI() {
-                    var b = $("btnCopy");
+                function copiedUI(b) {
                     b.classList.remove("wiggle");
                     b.classList.add("copied");
-                    $("copyLabel").textContent = "COPIED";
+                    b.querySelector("span").textContent = "COPIED";
                     var f = $("flash");
                     f.classList.add("on");
                     setTimeout(function () {
@@ -461,13 +460,15 @@
                         if (navigator.vibrate) navigator.vibrate(60);
                     } catch (e) {}
                     beep();
-                    var p = $("btnPost");
+                    var p = b.parentNode.querySelector(".post");
                     p.classList.remove("pulse");
                     void p.offsetWidth;
                     p.classList.add("pulse");
                     store.set(LS_SEEN, "1");
-                    if (copyTimer) clearTimeout(copyTimer);
-                    copyTimer = setTimeout(resetCopyUI, 1900);
+                    if (b._t) clearTimeout(b._t);
+                    b._t = setTimeout(function () {
+                        resetCopyUI(b);
+                    }, 1900);
                 }
                 function fallbackCopy(t) {
                     try {
@@ -493,8 +494,7 @@
                         return false;
                     }
                 }
-                function copyTweet() {
-                    var t = current;
+                function copyTweet(t, b) {
                     if (!t) return;
                     var useApi = false;
                     try {
@@ -503,17 +503,20 @@
                         );
                     } catch (e) {}
                     if (useApi) {
-                        navigator.clipboard
-                            .writeText(t)
-                            .then(copiedUI, function () {
+                        navigator.clipboard.writeText(t).then(
+                            function () {
+                                copiedUI(b);
+                            },
+                            function () {
                                 if (!fallbackCopy(t))
                                     hint(
                                         "Could not auto-copy.\nPress & hold the text, then Copy.",
                                     );
-                            });
+                            },
+                        );
                         return;
                     }
-                    if (fallbackCopy(t)) copiedUI();
+                    if (fallbackCopy(t)) copiedUI(b);
                     else
                         hint(
                             "Could not auto-copy.\nPress & hold the text, then Copy.",
@@ -538,8 +541,7 @@
                 }
 
                 /* ---------- POST on X ---------- */
-                function postX() {
-                    var t = current;
+                function postX(t) {
                     if (!t) return;
                     var w = window.open(
                         "https://x.com/intent/tweet?text=" +
@@ -585,21 +587,22 @@
                     ); /* clean up old deck data from previous versions */
                     $("btnNew").addEventListener("click", function () {
                         spin();
-                        pickRandom();
+                        shuffleAll();
                     });
-                    $("btnCopy").addEventListener("click", copyTweet);
-                    $("btnPost").addEventListener("click", postX);
                     loadTweets().then(function (ok) {
                         if (!ok) {
                             $("app").style.display = "none";
                             $("err").style.display = "grid";
                             return;
                         }
-                        pickRandom(); /* every visit/refresh = one random tweet */
-                        if (!store.get(LS_SEEN))
-                            $("btnCopy").classList.add(
-                                "wiggle",
-                            ); /* first-visit nudge to COPY */
+                        shuffleAll(); /* every visit/refresh = all tweets in a new random order */
+                        if (!store.get(LS_SEEN)) {
+                            var cs = document.querySelectorAll(".copy");
+                            for (var i = 0; i < cs.length; i++)
+                                cs[i].classList.add(
+                                    "wiggle",
+                                ); /* first-visit nudge to COPY */
+                        }
                     });
                 }
                 if (document.readyState === "loading")
