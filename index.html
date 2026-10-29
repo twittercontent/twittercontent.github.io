@@ -82,6 +82,27 @@
                 flex: 0 0 auto;
             }
 
+            /* Top bar: refresh button + language dropdown */
+            .topbar {
+                display: flex;
+                gap: 8px;
+            }
+            .topbar .new {
+                flex: 1;
+            }
+            .lang {
+                border: 2px solid #000;
+                border-radius: 12px;
+                background: #fff;
+                color: #000;
+                font-family: inherit;
+                font-weight: 800;
+                font-size: 15px;
+                height: 44px;
+                padding: 0 10px;
+                cursor: pointer;
+            }
+
             /* NEW: small, light grey, least important */
             .new {
                 background: #e2e2e2;
@@ -240,27 +261,33 @@
                 }
             }
         </style>
-        <meta name="google-adsense-account" content="ca-pub-7579645804240559">
+        <meta name="google-adsense-account" content="ca-pub-7579645804240559" />
     </head>
     <body>
         <div id="app">
-            <button id="btnNew" class="btn new" aria-label="Refresh">
-                <svg
-                    id="newIcon"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.6"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <polyline points="23 4 23 10 17 10"></polyline>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                </svg>
-                <span>REFRESH</span>
-            </button>
+            <div class="topbar">
+                <button id="btnNew" class="btn new" aria-label="Refresh">
+                    <svg
+                        id="newIcon"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    <span>REFRESH</span>
+                </button>
+                <select id="lang" class="lang" aria-label="Language">
+                    <option value="kn">Kannada</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
 
             <main id="list" aria-live="polite">
                 <div class="tweet">Loading&#8230;</div>
@@ -300,7 +327,8 @@
                     return document.getElementById(id);
                 };
                 var LS_CACHE = "td_cache_v1",
-                    LS_SEEN = "td_seen_v1";
+                    LS_SEEN = "td_seen_v1",
+                    LS_LANG = "td_lang_v1";
 
                 /* Safe storage: falls back to memory if localStorage is blocked */
                 var store = {
@@ -334,6 +362,7 @@
                 };
 
                 var tweets = [];
+                var lang = store.get(LS_LANG) === "en" ? "en" : "kn";
 
                 /* Accepts: ["tweet",...] | [{"text"|"content"|"tweet"|"body":...},...] | {"tweets":[...]} */
                 function normalize(data) {
@@ -356,7 +385,10 @@
                 }
 
                 function loadTweets() {
-                    return fetch("tweets/tweets.json", { cache: "no-cache" })
+                    var cacheKey = LS_CACHE + "_" + lang;
+                    return fetch("tweets/tweets_" + lang + ".json", {
+                        cache: "no-cache",
+                    })
                         .then(function (r) {
                             if (!r.ok) throw new Error("http " + r.status);
                             return r.json();
@@ -365,12 +397,12 @@
                             var arr = normalize(data);
                             if (!arr.length) throw new Error("empty");
                             tweets = arr;
-                            store.set(LS_CACHE, JSON.stringify(arr));
+                            store.set(cacheKey, JSON.stringify(arr));
                             return true;
                         })
                         .catch(function () {
                             try {
-                                var c = store.get(LS_CACHE);
+                                var c = store.get(cacheKey);
                                 if (c) {
                                     var arr = normalize(JSON.parse(c));
                                     if (arr.length) {
@@ -593,6 +625,19 @@
                     store.del(
                         "td_pos_v1",
                     ); /* clean up old deck data from previous versions */
+                    $("lang").value = lang;
+                    $("lang").addEventListener("change", function () {
+                        lang = this.value === "en" ? "en" : "kn";
+                        store.set(LS_LANG, lang);
+                        loadTweets().then(function (ok) {
+                            if (!ok) {
+                                $("app").style.display = "none";
+                                $("err").style.display = "grid";
+                                return;
+                            }
+                            shuffleAll();
+                        });
+                    });
                     $("btnNew").addEventListener("click", function () {
                         spin();
                         shuffleAll();
